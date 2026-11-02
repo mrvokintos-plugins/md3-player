@@ -99,6 +99,7 @@ jobs:
           key: tools-${{ hashFiles('scripts/fetch-tools.sh') }}
 
       - name: inugram classpath
+        id: classpath
         if: steps.detect.outputs.build == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -199,7 +200,8 @@ jobs:
           echo "posted to @${CHANNEL#@}"
 
       - name: report upstream break
-        if: failure() && steps.detect.outputs.build == 'true'
+        # only a broken port/build is an upstream break; publishing problems are visible in the run itself
+        if: failure() && (steps.classpath.outcome == 'failure' || steps.build.outcome == 'failure')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
