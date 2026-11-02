@@ -178,6 +178,7 @@ jobs:
           } > notes.md
           gh release create "$tag" dist/md3-player.inu.js --title "$tag" --notes-file notes.md
           echo "released=true" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
       - name: post to Telegram channel
         if: steps.release.outputs.released == 'true' && vars.TELEGRAM_CHANNEL != ''
@@ -187,20 +188,14 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "$BOT_TOKEN" ]; then echo "TELEGRAM_BOT_TOKEN is not set, skipping"; exit 0; fi
-          ext=${{ steps.detect.outputs.ext_sha }}
-          old=${{ steps.detect.outputs.old_ext }}
-          {
-            echo "MD3 Player ${{ steps.build.outputs.version }}"
-            echo "exteraless@${ext:0:7} · inugram ${{ steps.detect.outputs.inu_tag }}"
-            if [ -n "$old" ] && git -C upstream/exteraless cat-file -e "$old" 2>/dev/null; then
-              changes=$(git -C upstream/exteraless log --format='• %s' "$old..$ext" -- $UPSTREAM_PATHS | head -15)
-              if [ -n "$changes" ]; then echo; echo "$changes"; fi
-            fi
-          } | head -c 1000 | iconv -f utf-8 -t utf-8 -c > caption.txt
+          python3 scripts/tg-caption.py "${{ steps.build.outputs.version }}" "${{ steps.detect.outputs.ext_sha }}" \
+            "${{ steps.detect.outputs.inu_tag }}" "${{ steps.release.outputs.tag }}" \
+            "${{ steps.detect.outputs.old_ext }}" upstream/exteraless > caption.html
           curl -sS --fail-with-body \
             --form-string chat_id="@${CHANNEL#@}" \
+            --form-string parse_mode=HTML \
             -F document=@dist/md3-player.inu.js \
-            -F caption="<caption.txt" \
+            -F caption="<caption.html" \
             "https://api.telegram.org/bot${BOT_TOKEN}/sendDocument" > /dev/null
           echo "posted to @${CHANNEL#@}"
 
