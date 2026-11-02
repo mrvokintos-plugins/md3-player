@@ -119,8 +119,8 @@ jobs:
         if: steps.detect.outputs.build == 'true'
         run: |
           set -euo pipefail
-          ext7=$(echo "${{ steps.detect.outputs.ext_sha }}" | cut -c1-7)
-          version="$(cat VERSION).$(date -u +%Y%m%d)+${ext7}"
+          # monotonic: Inugram and the update check only see an update when the version changes
+          version="$(cat VERSION).${{ github.run_number }}"
           echo "version=$version" >> "$GITHUB_OUTPUT"
           PORT_SHA="${{ steps.detect.outputs.ext_sha }}" MD3_VERSION="$version" MD3_CHANNEL="${{ vars.TELEGRAM_CHANNEL }}" \
             scripts/build.sh upstream/exteraless .cache/inugram-classpath.jar
@@ -158,8 +158,7 @@ jobs:
               exit 0
             fi
           fi
-          tag="v$(cat VERSION).$(date -u +%Y%m%d)-${ext:0:7}"
-          if gh release view "$tag" >/dev/null 2>&1; then tag="$tag-r${{ github.run_number }}"; fi
+          tag="v${{ steps.build.outputs.version }}"
           {
             echo "Ported from [exteraless@${ext:0:9}](https://github.com/$EXTERALESS_REPO/commit/$ext), built against inugram **${{ steps.detect.outputs.inu_tag }}**."
             echo
