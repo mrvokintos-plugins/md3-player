@@ -118,10 +118,16 @@ jobs:
       - name: port and build
         id: build
         if: steps.detect.outputs.build == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          # monotonic: Inugram and the update check only see an update when the version changes
-          version="$(cat VERSION).${{ github.run_number }}"
+          # next number after the latest release of this base version: 0.1.13 -> 0.1.14, no gaps from runs
+          # that did not release anything
+          base=$(cat VERSION)
+          last=$(gh release list -L 100 --exclude-drafts --json tagName --jq '.[].tagName' \
+            | sed -n "s/^v${base//./\\.}\.\([0-9][0-9]*\)$/\1/p" | sort -n | tail -1)
+          version="$base.$(( ${last:-0} + 1 ))"
           echo "version=$version" >> "$GITHUB_OUTPUT"
           PORT_SHA="${{ steps.detect.outputs.ext_sha }}" MD3_VERSION="$version" MD3_CHANNEL="${{ vars.TELEGRAM_CHANNEL }}" \
             scripts/build.sh upstream/exteraless .cache/inugram-classpath.jar
@@ -176,7 +182,14 @@ jobs:
             echo
             echo "</details>"
           } > notes.md
-          gh release create "$tag" dist/md3-player.inu.js --title "$tag" --notes-file notes.md
+          for attempt in 1 2 3; do
+            if gh release create "$tag" dist/md3-player.inu.js --title "$tag" --notes-file notes.md; then break; fi
+            if [ "$attempt" = 3 ]; then exit 1; fi
+            echo "release failed, retrying"
+            sleep $((attempt * 15))
+            # a failed create can leave the release or its tag behind
+            gh release delete "$tag" --cleanup-tag -y 2>/dev/null || git push origin ":refs/tags/$tag" 2>/dev/null || true
+          done
           echo "released=true" >> "$GITHUB_OUTPUT"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
 

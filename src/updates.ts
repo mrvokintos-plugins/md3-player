@@ -19,21 +19,12 @@ export function currentVersion(): string {
   return inu.info().header.version?.[0] ?? '0'
 }
 
-/** 0.1.0.20261102+abc -> [0, 1, 0, 20261102] */
-function parts(version: string): number[] {
-  return version.split('+')[0].split('.').map(n => Number.parseInt(n, 10) || 0)
-}
-
+/**
+ * Like Inugram's own repo check: the newest release post is an update whenever its version differs from the
+ * installed one. Version numbers are not compared, so a renumbered release still reaches everyone.
+ */
 export function isNewer(candidate: string, current: string): boolean {
-  if (candidate === current) return false
-  const a = parts(candidate)
-  const b = parts(current)
-  for (let i = 0; i < Math.max(a.length, b.length); i++) {
-    const d = (a[i] ?? 0) - (b[i] ?? 0)
-    if (d !== 0) return d > 0
-  }
-  // same numbers, different build: the channel only ever gets newer posts
-  return true
+  return candidate !== current
 }
 
 export async function latestRelease(): Promise<Release | null> {
