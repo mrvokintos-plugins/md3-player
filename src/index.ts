@@ -165,6 +165,11 @@ const LOCAL: Record<string, Record<string, string>> = {
     open: 'Open',
     failed: 'Could not check',
     channel: 'Releases channel: @%s',
+    reset: 'Reset player settings',
+    resetText: 'The player and mini player look and all toggles go back to their defaults.',
+    resetConfirm: 'Reset',
+    cancel: 'Cancel',
+    resetDone: 'Settings reset',
   },
   ru: {
     miniHint: 'Плавающий плеер над вкладками на главном экране',
@@ -178,6 +183,11 @@ const LOCAL: Record<string, Record<string, string>> = {
     open: 'Открыть',
     failed: 'Не удалось проверить',
     channel: 'Канал с релизами: @%s',
+    reset: 'Сбросить настройки плеера',
+    resetText: 'Вид плеера, мини-плеера и все тумблеры вернутся к значениям по умолчанию.',
+    resetConfirm: 'Сбросить',
+    cancel: 'Отмена',
+    resetDone: 'Настройки сброшены',
   },
 }
 
@@ -214,6 +224,25 @@ const settings = inu.ui.settingsPage({
       text: str('OEPlayerCustomize'),
       icon: inu.icons.common('edit'),
       onClick: () => Entry.callStatic('openStyleEditor', inu.android.getCurrentFragment()),
+    }),
+    inu.ui.button({
+      id: 'reset',
+      text: local('reset'),
+      icon: inu.icons.common('delete'),
+      danger: true,
+      onClick: () => {
+        inu.ui.dialog({
+          title: local('reset'),
+          message: local('resetText'),
+          positive: local('resetConfirm'),
+          negative: local('cancel'),
+        }).then((answer) => {
+          if (answer !== 'positive') return
+          Entry.callStatic('resetSettings')
+          settings.invalidate()
+          inu.ui.bulletin({ text: local('resetDone'), icon: inu.icons.common('check') })
+        }).catch(e => console.error('md3player: reset failed', e))
+      },
     }),
     ...updateRows(),
     inu.ui.separator(`${currentVersion()} · exteraless@${Entry.callStatic('version')}`),

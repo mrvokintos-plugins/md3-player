@@ -120,15 +120,8 @@ public final class ContextBar {
     /** after updateStyle(...) */
     public static void afterUpdateStyle(Object view) {
         FragmentContextView v = (FragmentContextView) view;
-        State state = states.get(v);
-        if (state == null || !resolve()) return;
-        if (!computeMd3(v)) {
-            state.md3 = false;
-            if (state.bar != null) state.bar.setVisibility(View.GONE);
-            try {
-                ((View) titleField.get(v)).setVisibility(View.VISIBLE);
-            } catch (Throwable ignore) {
-            }
+        if (states.containsKey(v)) {
+            check(v);
         }
     }
 
@@ -152,6 +145,7 @@ public final class ContextBar {
     private static void check(FragmentContextView v) {
         if (!resolve()) return;
         try {
+            MessageObject playing = MediaController.getInstance().getPlayingMessageObject();
             boolean value = computeMd3(v);
             State state = states.get(v);
             if (state == null) {
@@ -159,7 +153,10 @@ public final class ContextBar {
                 state = new State();
                 states.put(v, state);
             }
-            boolean changed = value != state.md3;
+            if (!value && state.md3 && playing == null) {
+                // playback stopped: the view is animating out, keep the MD3 bar until it is gone
+                return;
+            }
             state.md3 = value;
             if (value && state.bar == null) {
                 Theme.ResourcesProvider rp = (Theme.ResourcesProvider) resourcesField.get(v);
@@ -179,17 +176,17 @@ public final class ContextBar {
                 setVisibility(closeButtonField.get(v), stock);
                 setVisibility(speedButtonField.get(v), stock);
             }
-            if (changed) {
-                int height = value ? PlayerBarView.HEIGHT_DP : v.getStyleHeight();
-                FrameLayout frame = (FrameLayout) frameLayoutField.get(v);
-                if (frame != null) {
-                    frame.setLayoutParams(LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, height, Gravity.TOP | Gravity.LEFT, 0, 0, 0, 0));
-                }
-                float topPadding = topPaddingField.getFloat(v);
-                if (topPadding > 0 && topPadding != AndroidUtilities.dp2(height)) {
-                    v.setTopPadding(AndroidUtilities.dp2(height));
-                }
+            // always match the frame to the current style: the stock code sizes it while our height is still applied
+            int height = value ? PlayerBarView.HEIGHT_DP : v.getStyleHeight();
+            int px = AndroidUtilities.dp(height);
+            FrameLayout frame = (FrameLayout) frameLayoutField.get(v);
+            if (frame != null && frame.getLayoutParams() != null && frame.getLayoutParams().height != px) {
+                frame.setLayoutParams(LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, height, Gravity.TOP | Gravity.LEFT, 0, 0, 0, 0));
                 v.requestLayout();
+            }
+            float topPadding = topPaddingField.getFloat(v);
+            if (topPadding > 0 && topPadding != AndroidUtilities.dp2(height)) {
+                v.setTopPadding(AndroidUtilities.dp2(height));
             }
             if (value) {
                 state.bar.update();

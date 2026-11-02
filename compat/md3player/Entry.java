@@ -98,6 +98,23 @@ public final class Entry {
         return null;
     }
 
+    /** Back to defaults: every player setting and the plugin's own toggles. */
+    public static void resetSettings() {
+        ConfigItem.prefs().edit().clear().apply();
+        for (ConfigItem item : AppearanceConfig.ALL) item.invalidate();
+        for (ConfigItem item : md3player.compat.PluginConfig.ALL) item.invalidate();
+        AndroidUtilities.runOnUIThread(() -> {
+            try {
+                PlayerMiniView.styleChanged();
+                TabsHost.refresh();
+                org.telegram.messenger.NotificationCenter.getInstance(org.telegram.messenger.UserConfig.selectedAccount)
+                        .postNotificationName(org.telegram.messenger.NotificationCenter.messagePlayingPlayStateChanged, 0);
+            } catch (Throwable t) {
+                Log.w(TAG, "settings reset", t);
+            }
+        });
+    }
+
     public static void openStyleEditor(Object fragment) {
         AndroidUtilities.runOnUIThread(() -> {
             try {

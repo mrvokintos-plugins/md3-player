@@ -241,7 +241,7 @@ public final class TabsHost {
             // distance from the bottom of the wrapper (which sits above the navigation bar) to the top of the tabs
             tabsHeight = Math.max(0, wrapper.getHeight() - tabsView.getTop());
         }
-        int gap = AndroidUtilities.dp(hidden ? 12 : 8);
+        int gap = AndroidUtilities.dp(12);
         host.mini.setHostPosition(-(navigationBarHeight + updateLayoutHeight + tabsHeight + gap - AndroidUtilities.dp(12)), hidden ? 1f : factor);
         updateTopAnchor(host);
     }
