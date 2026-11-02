@@ -26,14 +26,8 @@ export default defineConfig({
         author: 'mrvokintos',
         version: pkgVersion,
         description: {
-          en: 'Material 3 music player ported from **exteraless**: full-screen player with cover styles, wavy seek bar, '
-            + 'synced lyrics (file tags, opt-in LRCLIB/lrcmux), queue with drag-to-reorder, mini player on the main tabs, '
-            + 'bar in chats and a style editor. The player runs as bundled Java code (DEX) hooked into the app; '
-            + 'online lyrics are fetched by that code directly, only after you allow it.',
-          ru: 'Музыкальный плеер в стиле Material 3, портированный из **exteraless**: полноэкранный плеер со стилями обложки, '
-            + 'волнистым ползунком, синхронизированной лирикой (из тегов файла и, по согласию, LRCLIB/lrcmux), очередью с '
-            + 'перетаскиванием, мини-плеером на главных вкладках, баром в чатах и редактором стиля. Плеер работает как '
-            + 'встроенный Java-код (DEX) с хуками в приложение; онлайн-лирику этот код запрашивает сам и только после разрешения.',
+          en: 'Material 3 music player from exteraless. @mrvokintos_plugins',
+          ru: 'Музыкальный плеер Material 3 из exteraless. @mrvokintos_plugins',
         },
         icon: 'inu://unmute',
         grants: ['unsafe.jvm', 'unsafe.xposed', ...(channel ? ['account.read(peers,history)'] : [])],
