@@ -1,0 +1,16 @@
+{
+  "name": "md3-player",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "inu build",
+    "check": "inu check",
+    "dev": "inu dev",
+    "push": "inu push"
+  },
+  "devDependencies": {
+    "@inugram/cli": "^50.0.0",
+    "@inugram/plugin-types": "^50.0.0",
+    "typescript": "^5.9.3"
+  }
+}

@@ -1,0 +1,227 @@
+name: sync
+
+# Ports the exteraless MD3 player into the plugin whenever exteraless (player sources) or inugram (a new
+# release, i.e. a new classpath) changes, and publishes the built .inu.js as a GitHub release.
+
+on:
+  schedule:
+    - cron: '17 4 * * *'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Build and release even if nothing changed upstream
+        type: boolean
+        default: false
+  push:
+    branches: [main]
+    paths-ignore: ['**.md', 'LICENSE']
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: sync
+  cancel-in-progress: false
+
+env:
+  EXTERALESS_REPO: exteraless/exteraless
+  INUGRAM_REPO: teidesu/inugram
+  UPSTREAM_PATHS: >-
+    TMessagesProj/src/main/java/app/exteraless/player
+    TMessagesProj/src/main/kotlin/app/exteraless/appearance/AppearanceConfig.kt
+    :(glob)TMessagesProj/src/main/res/values*/strings_oe_player.xml
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: checkout exteraless (player sources only)
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ env.EXTERALESS_REPO }}
+          path: upstream/exteraless
+          fetch-depth: 200
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            TMessagesProj/src/main/java/app/exteraless/player/
+            TMessagesProj/src/main/kotlin/app/exteraless/appearance/AppearanceConfig.kt
+            TMessagesProj/src/main/res/values*/strings*.xml
+
+      - name: detect upstream changes
+        id: detect
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          ext_sha=$(git -C upstream/exteraless log -1 --format=%H -- $UPSTREAM_PATHS)
+          inu_tag=$(gh release view -R "$INUGRAM_REPO" --json tagName --jq .tagName)
+          old_ext=$(grep '^exteraless=' upstream.lock 2>/dev/null | cut -d= -f2 || true)
+          old_inu=$(grep '^inugram=' upstream.lock 2>/dev/null | cut -d= -f2 || true)
+          echo "exteraless: $old_ext -> $ext_sha"
+          echo "inugram:    $old_inu -> $inu_tag"
+          changed=false
+          if [ "$ext_sha" != "$old_ext" ] || [ "$inu_tag" != "$old_inu" ]; then changed=true; fi
+          build=$changed
+          if [ "${{ github.event_name }}" = push ] || [ "${{ inputs.force }}" = true ]; then build=true; fi
+          {
+            echo "ext_sha=$ext_sha"
+            echo "inu_tag=$inu_tag"
+            echo "old_ext=$old_ext"
+            echo "changed=$changed"
+            echo "build=$build"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-java@v6
+        if: steps.detect.outputs.build == 'true'
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: pnpm/action-setup@v6
+        if: steps.detect.outputs.build == 'true'
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v7
+        if: steps.detect.outputs.build == 'true'
+        with:
+          node-version: '22'
+          cache: pnpm
+
+      - name: tools cache
+        if: steps.detect.outputs.build == 'true'
+        uses: actions/cache@v6
+        with:
+          path: .cache/tools
+          key: tools-${{ hashFiles('scripts/fetch-tools.sh') }}
+
+      - name: inugram classpath
+        if: steps.detect.outputs.build == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          scripts/fetch-tools.sh
+          mkdir -p .cache/apk
+          gh release download "${{ steps.detect.outputs.inu_tag }}" -R "$INUGRAM_REPO" -p '*-full.apk' -D .cache/apk --clobber
+          apk=$(ls .cache/apk/*-full.apk | head -1)
+          .cache/tools/dex2jar/d2j-dex2jar.sh -f -o .cache/inugram-classpath.jar "$apk"
+
+      - name: install
+        if: steps.detect.outputs.build == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: port and build
+        id: build
+        if: steps.detect.outputs.build == 'true'
+        run: |
+          set -euo pipefail
+          ext7=$(echo "${{ steps.detect.outputs.ext_sha }}" | cut -c1-7)
+          version="$(cat VERSION).$(date -u +%Y%m%d)+${ext7}"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          PORT_SHA="${{ steps.detect.outputs.ext_sha }}" MD3_VERSION="$version" MD3_CHANNEL="${{ vars.TELEGRAM_CHANNEL }}" \
+            scripts/build.sh upstream/exteraless .cache/inugram-classpath.jar
+          MD3_CHANNEL="${{ vars.TELEGRAM_CHANNEL }}" pnpm exec inu check
+
+      - name: commit generated sources and lock
+        if: steps.detect.outputs.build == 'true' && success()
+        run: |
+          set -euo pipefail
+          printf 'exteraless=%s\ninugram=%s\n' "${{ steps.detect.outputs.ext_sha }}" "${{ steps.detect.outputs.inu_tag }}" > upstream.lock
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add upstream.lock generated
+          if git diff --cached --quiet; then
+            echo "nothing to commit"
+          else
+            git commit -m "sync: exteraless@$(echo ${{ steps.detect.outputs.ext_sha }} | cut -c1-9), inugram ${{ steps.detect.outputs.inu_tag }}"
+            git push
+          fi
+
+      - name: release
+        id: release
+        if: steps.detect.outputs.build == 'true' && success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          ext=${{ steps.detect.outputs.ext_sha }}
+          old=${{ steps.detect.outputs.old_ext }}
+          # skip when the plugin is identical to the latest release (ignoring the version line)
+          mkdir -p .cache/prev
+          if gh release download -p '*.inu.js' -D .cache/prev --clobber 2>/dev/null; then
+            if diff -q <(grep -v '^// @version' .cache/prev/md3-player.inu.js) <(grep -v '^// @version' dist/md3-player.inu.js) >/dev/null; then
+              echo "plugin unchanged since the latest release, not releasing"
+              exit 0
+            fi
+          fi
+          tag="v$(cat VERSION).$(date -u +%Y%m%d)-${ext:0:7}"
+          if gh release view "$tag" >/dev/null 2>&1; then tag="$tag-r${{ github.run_number }}"; fi
+          {
+            echo "Ported from [exteraless@${ext:0:9}](https://github.com/$EXTERALESS_REPO/commit/$ext), built against inugram **${{ steps.detect.outputs.inu_tag }}**."
+            echo
+            if [ -n "$old" ] && git -C upstream/exteraless cat-file -e "$old" 2>/dev/null; then
+              echo "### Upstream player changes"
+              echo
+              git -C upstream/exteraless log --format='- %s (%h)' "$old..$ext" -- $UPSTREAM_PATHS | head -50 \
+                | sed 's/\(^\|[^[:alnum:]_`]\)@\([[:alpha:]]\)/\1@\xE2\x80\x8B\2/g'
+              echo
+            fi
+            echo "<details><summary>Port report</summary>"
+            echo
+            tail -n +3 generated/port-report.md | sed 's/\(^\|[^[:alnum:]_`]\)@\([[:alpha:]]\)/\1@\xE2\x80\x8B\2/g'
+            echo
+            echo "</details>"
+          } > notes.md
+          gh release create "$tag" dist/md3-player.inu.js --title "$tag" --notes-file notes.md
+          echo "released=true" >> "$GITHUB_OUTPUT"
+
+      - name: post to Telegram channel
+        if: steps.release.outputs.released == 'true' && vars.TELEGRAM_CHANNEL != ''
+        env:
+          BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          CHANNEL: ${{ vars.TELEGRAM_CHANNEL }}
+        run: |
+          set -euo pipefail
+          if [ -z "$BOT_TOKEN" ]; then echo "TELEGRAM_BOT_TOKEN is not set, skipping"; exit 0; fi
+          ext=${{ steps.detect.outputs.ext_sha }}
+          old=${{ steps.detect.outputs.old_ext }}
+          {
+            echo "MD3 Player ${{ steps.build.outputs.version }}"
+            echo "exteraless@${ext:0:7} · inugram ${{ steps.detect.outputs.inu_tag }}"
+            if [ -n "$old" ] && git -C upstream/exteraless cat-file -e "$old" 2>/dev/null; then
+              changes=$(git -C upstream/exteraless log --format='• %s' "$old..$ext" -- $UPSTREAM_PATHS | head -15)
+              if [ -n "$changes" ]; then echo; echo "$changes"; fi
+            fi
+          } | head -c 1000 | iconv -f utf-8 -t utf-8 -c > caption.txt
+          curl -sS --fail-with-body \
+            --form-string chat_id="@${CHANNEL#@}" \
+            -F document=@dist/md3-player.inu.js \
+            -F caption="<caption.txt" \
+            "https://api.telegram.org/bot${BOT_TOKEN}/sendDocument" > /dev/null
+          echo "posted to @${CHANNEL#@}"
+
+      - name: report upstream break
+        if: failure() && steps.detect.outputs.build == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          title="Port broken: exteraless@$(echo ${{ steps.detect.outputs.ext_sha }} | cut -c1-9) / inugram ${{ steps.detect.outputs.inu_tag }}"
+          {
+            echo "The automatic port failed in [run ${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})."
+            echo "The previous release stays current. Fix \`porter/rules.txt\` or the compat layer, then re-run."
+            echo
+            [ -f generated/port-report.md ] && sed 's/\(^\|[^[:alnum:]_`]\)@\([[:alpha:]]\)/\1@\xE2\x80\x8B\2/g' generated/port-report.md
+          } > issue.md
+          gh label create upstream-break --color B60205 --force >/dev/null 2>&1 || true
+          existing=$(gh issue list --label upstream-break --state open --json number --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body-file issue.md
+            gh issue edit "$existing" --title "$title"
+          else
+            gh issue create --title "$title" --label upstream-break --body-file issue.md
+          fi

@@ -1,0 +1,38 @@
+# Porter rules: how exteraless player sources are rewritten into the md3player plugin dex.
+# One rule per line: <kind> <args...>. '#' starts a comment.
+#
+# fqn <from> <to>               textual rename of a fully-qualified prefix (packages, classes, imports)
+# field <expr> <replacement>    replace a field access whose source text ends with <expr>
+# call <name> drop|arg <static> rewrite obj.name(args) into <static>(args) (drop) or <static>(obj, args) (arg)
+# wrapnew <Type> <static>       wrap `new Type(...)` into <static>(new Type(...))
+# literal <from> <to>           replace a substring inside string literals
+# drawable <name> <stockName>   fork-only drawable -> stock drawable used instead
+# forbid <prefix>               fail the port if this prefix survives the rewrite
+
+fqn app.exteraless.player md3player.player
+fqn app.exteraless.appearance.AppearanceConfig md3player.gen.AppearanceConfig
+fqn tw.nekomimi.nekogram.config.ConfigItem md3player.compat.ConfigItem
+fqn tw.nekomimi.nekogram.helpers.MonetHelper md3player.compat.MonetHelper
+fqn tw.nekomimi.nekogram.helpers.TypefaceHelper md3player.compat.TypefaceHelper
+fqn xyz.nextalone.nagram.NaConfig md3player.compat.NaConfig
+
+# fork-only additions to stock classes
+field NotificationCenter.audioInfoLoaded md3player.compat.MediaCompat.AUDIO_INFO_LOADED
+field AudioPlayerAlert.PLAY_ONCE md3player.compat.MediaCompat.PLAY_ONCE
+call movePlaylistItem drop md3player.compat.MediaCompat.movePlaylistItem
+call seekShift drop md3player.compat.MediaCompat.seekShift
+call clearMusicPlaylistState drop md3player.compat.MediaCompat.clearMusicPlaylistState
+call isMonet arg md3player.compat.MonetHelper.isMonet
+
+# the classic player must stay classic: mark it so the open-player hook lets it through
+wrapnew AudioPlayerAlert md3player.hooks.Hooks.classic
+
+literal exteraless/ md3-player/
+literal https://github.com/exteraless/exteraless https://github.com/mrvokintos/md3-player
+
+drawable photo_timer msg_stories_timer
+
+forbid app.exteraless
+forbid tw.nekomimi
+forbid xyz.nextalone
+forbid com.exteragram
