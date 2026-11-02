@@ -23,7 +23,7 @@ export default defineConfig({
       manifest: {
         id: 'com.github.mrvokintos.md3player',
         name: 'MD3 Player',
-        author: 'mrvoki',
+        author: 'mrvokintos',
         version: pkgVersion,
         description: {
           en: 'Material 3 music player ported from **exteraless**: full-screen player with cover styles, wavy seek bar, '
