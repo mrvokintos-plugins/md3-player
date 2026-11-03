@@ -285,7 +285,10 @@ public final class Porter {
         for (StringLiteralExpr lit : cu.findAll(StringLiteralExpr.class)) {
             String value = lit.getValue();
             String replaced = value;
-            for (Map.Entry<String, String> rule : rules.literals.entrySet()) {
+            // longest first, so a URL rule wins over a rule for one of its parts
+            List<Map.Entry<String, String>> literalRules = new ArrayList<>(rules.literals.entrySet());
+            literalRules.sort((a, b) -> b.getKey().length() - a.getKey().length());
+            for (Map.Entry<String, String> rule : literalRules) {
                 replaced = replaced.replace(rule.getKey(), rule.getValue());
             }
             if (!replaced.equals(value)) {

@@ -432,7 +432,7 @@ public final class OnlineLyrics {
             try {
                 connection.setConnectTimeout(8_000);
                 connection.setReadTimeout(10_000 + attempt * 5_000);
-                connection.setRequestProperty("User-Agent", "md3-player/" + BuildVars.BUILD_VERSION_STRING + " (https://github.com/md3-player/exteraless)");
+                connection.setRequestProperty("User-Agent", "md3-player/" + BuildVars.BUILD_VERSION_STRING + " (https://github.com/mrvokintos-plugins/md3-player)");
                 connection.setRequestProperty("Accept", "application/json");
                 int code = connection.getResponseCode();
                 if (code == 404) {

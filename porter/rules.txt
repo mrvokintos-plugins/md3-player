@@ -28,7 +28,7 @@ call isMonet arg md3player.compat.MonetHelper.isMonet
 wrapnew AudioPlayerAlert md3player.hooks.Hooks.classic
 
 literal exteraless/ md3-player/
-literal https://github.com/exteraless/exteraless https://github.com/mrvokintos/md3-player
+literal https://github.com/exteraless/exteraless https://github.com/mrvokintos-plugins/md3-player
 
 drawable photo_timer msg_stories_timer
 

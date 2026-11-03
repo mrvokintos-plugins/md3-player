@@ -23,12 +23,9 @@ export default defineConfig({
       manifest: {
         id: 'com.github.mrvokintos.md3player',
         name: 'MD3 Player',
-        author: 'mrvokintos',
+        author: '@mrvokintos_plugins',
         version: pkgVersion,
-        description: {
-          en: 'Material 3 music player from exteraless. @mrvokintos_plugins',
-          ru: 'Музыкальный плеер Material 3 из exteraless. @mrvokintos_plugins',
-        },
+        description: 'Material 3 music player from exteraless.',
         icon: 'inu://unmute',
         grants: ['unsafe.jvm', 'unsafe.xposed', ...(channel ? ['account.read(peers,history)'] : [])],
       },

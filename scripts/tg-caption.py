@@ -8,7 +8,7 @@ import html
 import subprocess
 import sys
 
-REPO = "mrvokintos/md3-player"
+REPO = "mrvokintos-plugins/md3-player"
 EXTERALESS = "exteraless/exteraless"
 INUGRAM = "teidesu/inugram"
 PATHS = [
