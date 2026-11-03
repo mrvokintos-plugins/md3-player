@@ -5,6 +5,7 @@ usage: tg-caption.py <version> <ext_sha> <inugram_tag> <release_tag> [<old_ext_s
 The first line must stay "MD3 Player <version>": the plugin's update check parses it.
 """
 import html
+import os
 import subprocess
 import sys
 
@@ -50,12 +51,14 @@ def main():
         "exteraless " + link(f"https://github.com/{EXTERALESS}/commit/{ext}", ext[:7])
         + " · inugram " + link(f"https://github.com/{INUGRAM}/releases/tag/{inu_tag}", inu_tag),
     ]
+    repo_channel = os.environ.get("REPO_CHANNEL", "").lstrip("@")
     foot = [
         link(f"https://github.com/{REPO}/releases/tag/{release_tag}", "Release")
         + " · " + link(f"https://github.com/{REPO}", "GitHub")
-        + " · " + link(f"https://github.com/{EXTERALESS}", "exteraless"),
+        + " · " + link(f"https://github.com/{EXTERALESS}", "exteraless")
+        + (" · " + link(f"https://t.me/{repo_channel}", "Repo") if repo_channel else ""),
     ]
-    visible = len(f"MD3 Player {version}") + len(f"exteraless {ext[:7]} · inugram {inu_tag}") + len("Release · GitHub · exteraless") + 6
+    visible = len(f"MD3 Player {version}") + len(f"exteraless {ext[:7]} · inugram {inu_tag}") + len("Release · GitHub · exteraless · Repo") + 6
 
     body = []
     rows = changes(old, ext, checkout)

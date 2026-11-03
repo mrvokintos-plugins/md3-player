@@ -129,9 +129,9 @@ jobs:
             | sed -n "s/^v${base//./\\.}\.\([0-9][0-9]*\)$/\1/p" | sort -n | tail -1)
           version="$base.$(( ${last:-0} + 1 ))"
           echo "version=$version" >> "$GITHUB_OUTPUT"
-          PORT_SHA="${{ steps.detect.outputs.ext_sha }}" MD3_VERSION="$version" MD3_CHANNEL="${{ vars.TELEGRAM_CHANNEL }}" \
+          PORT_SHA="${{ steps.detect.outputs.ext_sha }}" MD3_VERSION="$version" MD3_CHANNEL="${{ vars.TELEGRAM_REPO_CHANNEL }}" \
             scripts/build.sh upstream/exteraless .cache/inugram-classpath.jar
-          MD3_CHANNEL="${{ vars.TELEGRAM_CHANNEL }}" pnpm exec inu check
+          MD3_CHANNEL="${{ vars.TELEGRAM_REPO_CHANNEL }}" pnpm exec inu check
 
       - name: commit generated sources and lock
         if: steps.detect.outputs.build == 'true' && success()
@@ -193,24 +193,43 @@ jobs:
           echo "released=true" >> "$GITHUB_OUTPUT"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
-      - name: post to Telegram channel
-        if: steps.release.outputs.released == 'true' && vars.TELEGRAM_CHANNEL != ''
+      - name: publish to Telegram
+        if: steps.release.outputs.released == 'true' && (vars.TELEGRAM_REPO_CHANNEL != '' || vars.TELEGRAM_CHANNEL != '')
         env:
           BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          REPO_CHANNEL: ${{ vars.TELEGRAM_REPO_CHANNEL }}
           CHANNEL: ${{ vars.TELEGRAM_CHANNEL }}
+          POST_ID: ${{ vars.TELEGRAM_POST_ID }}
         run: |
           set -euo pipefail
           if [ -z "$BOT_TOKEN" ]; then echo "TELEGRAM_BOT_TOKEN is not set, skipping"; exit 0; fi
+          api="https://api.telegram.org/bot${BOT_TOKEN}"
           python3 scripts/tg-caption.py "${{ steps.build.outputs.version }}" "${{ steps.detect.outputs.ext_sha }}" \
             "${{ steps.detect.outputs.inu_tag }}" "${{ steps.release.outputs.tag }}" \
             "${{ steps.detect.outputs.old_ext }}" upstream/exteraless > caption.html
-          curl -sS --fail-with-body \
-            --form-string chat_id="@${CHANNEL#@}" \
-            --form-string parse_mode=HTML \
-            -F document=@dist/md3-player.inu.js \
-            -F caption="<caption.html" \
-            "https://api.telegram.org/bot${BOT_TOKEN}/sendDocument" > /dev/null
-          echo "posted to @${CHANNEL#@}"
+
+          # repo channel (Inugram > Settings > Plugins > Repositories): a new post per release
+          if [ -n "$REPO_CHANNEL" ]; then
+            curl -sS --fail-with-body \
+              --form-string chat_id="@${REPO_CHANNEL#@}" \
+              --form-string parse_mode=HTML \
+              -F document=@dist/md3-player.inu.js \
+              -F caption="<caption.html" \
+              "$api/sendDocument" > /dev/null
+            echo "posted to @${REPO_CHANNEL#@}"
+          fi
+
+          # main channel: one permanent post that always carries the latest file
+          if [ -n "$CHANNEL" ] && [ -n "$POST_ID" ]; then
+            media=$(python3 -c 'import json,sys; print(json.dumps({"type": "document", "media": "attach://plugin", "caption": open("caption.html").read(), "parse_mode": "HTML"}))')
+            curl -sS --fail-with-body \
+              --form-string chat_id="@${CHANNEL#@}" \
+              --form-string message_id="$POST_ID" \
+              --form-string media="$media" \
+              -F plugin=@dist/md3-player.inu.js \
+              "$api/editMessageMedia" > /dev/null
+            echo "updated @${CHANNEL#@}/$POST_ID"
+          fi
 
       - name: report upstream break
         # only a broken port/build is an upstream break; publishing problems are visible in the run itself
