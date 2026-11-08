@@ -109,7 +109,7 @@ jobs:
           mkdir -p .cache/apk
           gh release download "${{ steps.detect.outputs.inu_tag }}" -R "$INUGRAM_REPO" -p '*-full.apk' -D .cache/apk --clobber
           apk=$(ls .cache/apk/*-full.apk | head -1)
-          .cache/tools/dex2jar/d2j-dex2jar.sh -f -o .cache/inugram-classpath.jar "$apk"
+          scripts/classpath.sh "$apk" .cache/inugram-classpath.jar
 
       - name: install
         if: steps.detect.outputs.build == 'true'
@@ -243,7 +243,9 @@ jobs:
             echo "The automatic port failed in [run ${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})."
             echo "The previous release stays current. Fix \`porter/rules.txt\` or the compat layer, then re-run."
             echo
-            [ -f generated/port-report.md ] && sed 's/\(^\|[^[:alnum:]_`]\)@\([[:alpha:]]\)/\1@\xE2\x80\x8B\2/g' generated/port-report.md
+            # the committed report is from the previous port; it is only fresh when the build step ran
+            [ "${{ steps.build.outcome }}" = failure ] && [ -f generated/port-report.md ] && sed 's/\(^\|[^[:alnum:]_`]\)@\([[:alpha:]]\)/\1@\xE2\x80\x8B\2/g' generated/port-report.md
+            true
           } > issue.md
           gh label create upstream-break --color B60205 --force >/dev/null 2>&1 || true
           existing=$(gh issue list --label upstream-break --state open --json number --jq '.[0].number // empty')

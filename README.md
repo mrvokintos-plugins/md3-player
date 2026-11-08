@@ -46,7 +46,7 @@ scripts/fetch-tools.sh
 
 # классы Inugram для компиляции, проще всего вытащить APK с телефона
 adb pull "$(adb shell pm path desu.inugram | sed 's/package://')" .cache/base.apk
-.cache/tools/dex2jar/d2j-dex2jar.sh -f -o .cache/inugram-classpath.jar .cache/base.apk
+scripts/classpath.sh .cache/base.apk .cache/inugram-classpath.jar
 
 scripts/build.sh ../exteraless .cache/inugram-classpath.jar
 pnpm push
